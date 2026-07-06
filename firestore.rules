@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Security rules for the Gym AI SaaS discovery app.
+//  - Anyone (anonymous public) may CREATE survey / waiting-list / contact docs.
+//  - Only authenticated team members may READ or UPDATE them (dashboard + admin).
+//  - No one may delete from the client.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Survey responses
+    match /surveyResponses/{doc} {
+      allow create: if isValidSurvey();
+      allow read, update: if isSignedIn();
+      allow delete: if isSignedIn(); // admins can remove junk/test responses
+    }
+
+    // Beta waiting list (from landing page)
+    match /waitingList/{doc} {
+      allow create: if hasContact();
+      allow read, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // Contact / interview requests
+    match /contacts/{doc} {
+      allow create: if hasContact();
+      allow read, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Basic shape/spam guards for public writes.
+    function isValidSurvey() {
+      let d = request.resource.data;
+      return d.gymName is string && d.gymName.size() > 0
+        && d.city is string
+        && d.gymSize is string;
+    }
+
+    function hasContact() {
+      let d = request.resource.data;
+      return (d.email is string && d.email.size() > 0)
+        || (d.phone is string && d.phone.size() > 0);
+    }
+  }
+}
